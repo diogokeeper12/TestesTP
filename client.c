@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h> 
+#include <sys/stat.h>
+
 #define SIZE 1024
 
 
@@ -16,14 +18,44 @@ typedef struct ParseInstruction{
     char IsPipeline[SIZE]; //-u-> execução um programa, -p ->execução encadeada
     char args[SIZE];
     int pid;
+    long timestamp;
 }ParseInstruction;
 
+typedef struct TaskNode {
+    ParseInstruction instruction;
+    struct TaskNode *next;
+} TaskNode;
+
+TaskNode *queueHead = NULL;
+TaskNode *queueTail = NULL;
 
 
 
 
+
+int parse_instruction(int argc, char *argv[], ParseInstruction *instruction) {
+    if (argc < 5) {
+        // Handle an error: not enough arguments provided
+        return -1;
+    }
+
+    strcpy(instruction->CommandType, argv[1]);
+    instruction->Time = atoi(argv[2]);
+    strcpy(instruction->IsPipeline, argv[3]);
+    strcpy(instruction->args, argv[4]);
+    instruction->pid = getpid();
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    instruction->timestamp = tv.tv_sec * 1000000 + tv.tv_usec;
+
+    return 0; // Success
+}
+
+
+/*
 //METER NOUTRO FICHEIRO RUNRPOGRAM
-/*void runProgram(ParseInstruction instruction) {
+void runProgram(ParseInstruction instruction) {
     char *buffer = malloc(sizeof(char) * SIZE); 
     char *commandArgs[SIZE];
 
@@ -67,24 +99,38 @@ typedef struct ParseInstruction{
 }
 */
 
+
 //TODO: FIFO PARA ESCREVER PARA O SERVER 
 
 int main(int argc, char* argv[]){
-    ParseInstruction instruction;
+    /* PARSE FUNCTION
+    
     strcpy(instruction.CommandType,argv[1]);
     instruction.Time = atoi(argv[2]);
     strcpy(instruction.IsPipeline, argv[3]);
     strcpy(instruction.args, argv[4]);
     instruction.pid = getpid();
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    instruction.timestamp = tv.tv_sec * 1000000 + tv.tv_usec; // Convertendo para microssegundos
+*/
+    ParseInstruction instruction;
+    if (parse_instruction(argc, argv, &instruction) == -1) {
+        fprintf(stderr, "Error: Invalid command line arguments\n");
+        return 1;
+   }
+   printf("Command Type: %s\n", instruction.CommandType);
+
+
 
     char fifoc_name[30];
-    sprintf(fifoc_name, "sv_cl" "%d", instruction.pid);
+    sprintf(fifoc_name, "sv_cl_%d", instruction.pid);
     if(mkfifo(fifoc_name, 0666) == -1) {
         perror("mkfifo client");
         return -1;
     }
 
-    int fd = open("fifo", O_WRONLY);
+    int fd = open("fifo_cl_sv", O_WRONLY);
 
     if(write(fd, &instruction, sizeof(instruction)) ==-1) {
         perror("erro client write 2");
@@ -105,11 +151,11 @@ int main(int argc, char* argv[]){
     int buf;
     read(fd_sv, &buf,sizeof(buf));
 
-    close(fd_sv);
-    printf("Recebi instrução do pid: %d", buf);
+        close(fd_sv);
+        printf("Recebi confirmção do pedido com identificador: %d", buf);
 
-    unlink(fifoc_name);
-    return 0;    
+        unlink(fifoc_name);
+        return 0;    
 }
 
 
